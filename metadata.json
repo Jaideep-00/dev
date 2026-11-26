@@ -1,0 +1,6 @@
+{
+  "name": "DevChat",
+  "description": "Local-first, end-to-end encrypted LAN developer chat with HLC sync, PAKE join codes, epoch key rotation, and network diagnostics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

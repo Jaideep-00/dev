@@ -1,0 +1,25 @@
+name: Windows Rust Build & Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows-ci:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        run: npm install
+      - name: Typecheck & build UI bundle
+        run: |
+          npm run lint
+          npm run build
+      - name: Run Rust workspace tests (core, crypto + DPAPI, SQLite FTS5, net)
+        run: cargo test --workspace
+      - name: Verify Tauri Windows binary compiles
+        run: cargo check --manifest-path src-tauri/Cargo.toml

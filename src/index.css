@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* DevChat Design System Tokens — Warm Near-Black & Off-White, Single Amber Accent */
+:root,
+[data-theme="dark"] {
+  --bg: #121110;
+  --surface: #1A1816;
+  --raised: #231F1C;
+  --border: #2E2A26;
+  --text: #ECE7DF;
+  --muted: #9A9288;
+  --accent-fill: #E0A030;
+  --accent-text: #E0A030;
+  --accent-on-fill: #121110;
+  --success: #6FB07A;
+  --warning: #E07B39;
+  --danger: #D2605A;
+  --info: #6A9FB5;
+  --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  --bg: #FAF7F2;
+  --surface: #F2EDE4;
+  --raised: #FFFFFF;
+  --border: #DDD5C8;
+  --text: #1E1A16;
+  --muted: #6F675D;
+  --accent-fill: #E0A030;
+  --accent-text: #8F5A08;
+  --accent-on-fill: #1E1A16;
+  --success: #3E7F4B;
+  --warning: #B35A1F;
+  --danger: #B3403A;
+  --info: #3F7690;
+  --shadow-raised: 0 8px 24px rgba(30, 26, 22, 0.12);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-fill);
+    outline-offset: 2px;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom thin scrollbars matching flat warm surfaces */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.animate-sync-pulse {
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sync-pulse {
+    animation: none;
+  }
+}

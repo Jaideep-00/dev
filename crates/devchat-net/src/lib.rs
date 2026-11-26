@@ -25,19 +25,28 @@ pub fn enumerate_lan_interfaces() -> Vec<NetworkInterfaceCandidate> {
 
     ifaces
         .into_iter()
-        .filter_map(|iface| match iface.addr {
-            if_addrs::IfAddr::V4(v4) => {
-                let ip = v4.ip.to_string();
-                let is_loopback = iface.is_loopback() || v4.ip.is_loopback();
-                Some(NetworkInterfaceCandidate {
-                    description: format!("IPv4 Interface ({})", iface.name),
-                    name: iface.name,
-                    ipv4: ip,
-                    is_up: true,
-                    is_loopback,
-                })
+        .filter_map(|iface| {
+            let iface_is_loopback = iface.is_loopback();
+
+            match iface.addr {
+                if_addrs::IfAddr::V4(v4) => {
+                    let ip = v4.ip.to_string();
+                    let is_loopback =
+                        iface_is_loopback || v4.ip.is_loopback();
+
+                    Some(NetworkInterfaceCandidate {
+                        description: format!(
+                            "IPv4 Interface ({})",
+                            iface.name
+                        ),
+                        name: iface.name,
+                        ipv4: ip,
+                        is_up: true,
+                        is_loopback,
+                    })
+                }
+                _ => None,
             }
-            _ => None,
         })
         .collect()
 }

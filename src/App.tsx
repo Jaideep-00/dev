@@ -103,13 +103,6 @@ interface PersistedWorkspace {
 
 const CODE_LANGUAGES = ['rust', 'typescript', 'sql', 'powershell', 'bash', 'json', 'plaintext'];
 
-const PEER_REPLIES = [
-  'Confirmed on my side — HLC ordering matches and signature verified cleanly.',
-  'Synced over LAN in under 15ms. Checking the local SQLCipher index now.',
-  'Good catch. I will keep Invite Mode open for a few more minutes if anyone else is joining.',
-  'Re-ran the convergence test with 30% drop rate; zero sequence gaps left after Have/Want.',
-];
-
 export default function App() {
   const [ready, setReady] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -122,7 +115,7 @@ export default function App() {
   const [simNet, setSimNet] = useState<SimNetSettings>({
     dropRatePercent: 0,
     partitioned: false,
-    autoReplyEnabled: true,
+    autoReplyEnabled: false,
   });
   const [allPeersOffline, setAllPeersOffline] = useState(false);
   const [syncingRooms, setSyncingRooms] = useState<Record<RoomId, boolean>>({});
@@ -207,12 +200,13 @@ export default function App() {
         // fall through to clean seed
       }
 
-      const seeded = await createInitialWorkspace('Jaideep');
+      // First launch: wait for the user to choose a display name.
       if (!cancelled) {
-        setIdentity(seeded.identity);
-        setRooms(seeded.rooms);
-        setActiveRoomId(seeded.activeRoomId);
+        setIdentity(null);
+        setRooms({});
+        setActiveRoomId(null);
         setDiagnostics(INITIAL_DIAGNOSTICS);
+        setScreen('first-run');
         setReady(true);
       }
     }
@@ -771,19 +765,6 @@ export default function App() {
       pulseSync(roomId);
     }
 
-    // Optional simulated LAN teammate reply
-    if (simNet.autoReplyEnabled && !allPeersOffline && kind.type !== 'file_offer') {
-      const remotePeers = Object.values(room.members).filter(
-        (m) => m.id !== identity.authorId && m.status === 'active' && m.presence === 'connected',
-      );
-      if (remotePeers.length > 0 && Math.random() * 100 >= simNet.dropRatePercent) {
-        const responder = remotePeers[seq % remotePeers.length];
-        const replyText = PEER_REPLIES[(seq + Object.keys(room.messages).length) % PEER_REPLIES.length];
-        window.setTimeout(() => {
-          void deliverSimulatedPeerMessage(roomId, responder, { type: 'text' }, replyText);
-        }, 1100);
-      }
-    }
   }
 
   async function deliverSimulatedPeerMessage(
@@ -1283,6 +1264,7 @@ export default function App() {
     setRooms(fresh.rooms);
     setActiveRoomId(fresh.activeRoomId);
     setDiagnostics(INITIAL_DIAGNOSTICS);
+    setReady(true);
     setScreen('room');
   }
 
@@ -1302,7 +1284,7 @@ export default function App() {
     setScreen('room');
   }
 
-  if (!ready || !identity) {
+  if (!ready || (!identity && screen !== 'first-run')) {
     return (
       <div className="h-full flex items-center justify-center text-sm" style={{ color: 'var(--muted)' }}>
         Initializing local cryptographic workspace…
@@ -1514,7 +1496,7 @@ export default function App() {
         {screen === 'first-run' && (
           <div className="flex-1 overflow-y-auto px-4">
             <FirstRunScreen
-              initialName={identity.displayName}
+              initialName={identity?.displayName ?? ''}
               onComplete={handleFirstRunComplete}
               onCancel={() => setScreen('room')}
             />

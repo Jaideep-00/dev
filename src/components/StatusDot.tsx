@@ -36,7 +36,7 @@ export function StatusDot({ state, showLabel = false, labelOverride }: StatusDot
         aria-hidden="true"
       />
       {showLabel && (
-        <span className="text-xs whitespace-nowrap" style={{ color: 'var(--muted)' }}>
+        <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--muted)' }}>
           {label}
         </span>
       )}

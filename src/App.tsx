@@ -114,10 +114,9 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('devchat-pinned-rooms-v1') || '[]'); }
     catch { return []; }
   });
-  const [repoShortcut, setRepoShortcut] = useState(() =>
+  const [repoShortcut] = useState(() =>
     localStorage.getItem('devchat-repository-url-v1') || 'https://github.com/Jaideep-00/dev'
   );
-  const [repoEditorOpen, setRepoEditorOpen] = useState(false);
 
   const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsCounters>(INITIAL_DIAGNOSTICS);
@@ -480,19 +479,6 @@ export default function App() {
     setPinnedRoomIds((current) =>
       current.includes(roomId) ? current.filter((id) => id !== roomId) : [...current, roomId]
     );
-  }
-
-  function saveRepositoryShortcut() {
-    const value = repoShortcut.trim();
-    if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(value)) {
-      setComposerNotice('Enter a valid GitHub repository URL (https://github.com/owner/repository).');
-      return;
-    }
-    const normalized = value.replace(/\/$/, '');
-    setRepoShortcut(normalized);
-    localStorage.setItem('devchat-repository-url-v1', normalized);
-    setRepoEditorOpen(false);
-    setComposerNotice('GitHub repository shortcut saved.');
   }
 
   function exportActiveRoom(format: 'json' | 'txt') {
@@ -1435,6 +1421,31 @@ export default function App() {
           </button>
         </div>
 
+        <section className="shrink-0 border-b pb-2 space-y-1"
+          style={{ borderColor: 'var(--border)' }}>
+          <div className="px-1 text-xs font-semibold flex items-center justify-between"
+            style={{ color: 'var(--muted)' }}>
+            <span>Pinned chats</span>
+            <span className="font-mono">{pinnedRoomIds.length}</span>
+          </div>
+          {pinnedRoomIds.map((id) => {
+            const pinned = rooms[id];
+            if (!pinned) return null;
+            return (
+              <button key={id} type="button" onClick={() => selectRoom(id)}
+                className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-[var(--raised)] truncate"
+                style={{ color: 'var(--accent-text)' }}>
+                ★ {pinned.name}
+              </button>
+            );
+          })}
+          {pinnedRoomIds.length === 0 && (
+            <div className="px-2 py-1 text-xs" style={{ color: 'var(--muted)' }}>
+              Use ☆ beside a room to pin it
+            </div>
+          )}
+        </section>
+
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="px-1 mb-1.5 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
             Joined rooms
@@ -1500,46 +1511,6 @@ export default function App() {
             )}
           </ul>
         </div>
-
-        {/* DEVCHAT_LOCAL_FEATURES_V1: pinned rooms and repository shortcut */}
-        <section className="shrink-0 border-t pt-2 space-y-1" style={{ borderColor: 'var(--border)' }}>
-          <div className="px-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-            Pinned rooms
-          </div>
-          {pinnedRoomIds.map((id) => {
-            const pinned = rooms[id];
-            if (!pinned) return null;
-            return (
-              <button key={id} type="button" onClick={() => selectRoom(id)}
-                className="w-full text-left px-2 py-1 rounded text-xs hover:bg-[var(--raised)] truncate"
-                style={{ color: 'var(--text)' }}>
-                ★ {pinned.name}
-              </button>
-            );
-          })}
-          {pinnedRoomIds.length === 0 && (
-            <div className="px-2 py-1 text-xs" style={{ color: 'var(--muted)' }}>Pin a room with ☆</div>
-          )}
-          <div className="flex items-center gap-1 pt-1">
-            <button type="button" onClick={() => window.open(repoShortcut, '_blank', 'noopener,noreferrer')}
-              className="flex-1 text-left px-2 py-1 rounded text-xs hover:bg-[var(--raised)]"
-              style={{ color: 'var(--accent-text)' }}>↗ GitHub repository</button>
-            <button type="button" title="Change repository URL" onClick={() => setRepoEditorOpen((v) => !v)}
-              className="px-2 py-1 rounded text-xs hover:bg-[var(--raised)]"
-              style={{ color: 'var(--muted)' }}>Edit</button>
-          </div>
-          {repoEditorOpen && (
-            <div className="space-y-1 px-1">
-              <input value={repoShortcut} onChange={(e) => setRepoShortcut(e.target.value)}
-                aria-label="GitHub repository URL" placeholder="https://github.com/owner/repo"
-                className="w-full min-w-0 px-2 py-1 rounded border text-xs"
-                style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-              <button type="button" onClick={saveRepositoryShortcut}
-                className="px-2 py-1 rounded text-xs font-semibold"
-                style={{ background: 'var(--accent-fill)', color: 'var(--accent-on-fill)' }}>Save URL</button>
-            </div>
-          )}
-        </section>
 
         {/* Bottom rail utility links */}
         <div className="pt-3 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
@@ -1705,29 +1676,43 @@ export default function App() {
           <>
             {/* Room Header */}
             <header
-              className="px-4 py-3 border-b flex items-center justify-between gap-4 shrink-0"
+              className="px-3 py-2 border-b flex items-center justify-between gap-2 shrink-0"
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <RoomSigil roomId={activeRoom.roomId} />
-                <h1 className="text-[20px] font-semibold m-0 truncate">{activeRoom.name}</h1>
-                {activeRoom.githubRepoUrl && (
-                  <a
-                    href={activeRoom.githubRepoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open this room's GitHub repository"
-                    className="min-h-[28px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                    style={{
-                      borderColor: 'var(--border)',
-                      color: 'var(--accent-text)',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <span aria-hidden="true">↗</span>
-                    <span>GitHub</span>
-                  </a>
-                )}
+                <h1 className="text-[18px] font-semibold m-0 truncate">{activeRoom.name}</h1>
+                <a
+                  href={activeRoom.githubRepoUrl || repoShortcut}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open GitHub repository"
+                  className="min-h-[26px] px-2 py-1 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  style={{
+                    borderColor: 'var(--border)',
+                    color: 'var(--accent-text)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span aria-hidden="true">↗</span>
+                  <span>GitHub</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => togglePinnedRoom(activeRoom.roomId)}
+                  title={pinnedRoomIds.includes(activeRoom.roomId)
+                    ? 'Unpin this chat' : 'Pin this chat'}
+                  aria-pressed={pinnedRoomIds.includes(activeRoom.roomId)}
+                  className="px-2 py-1 rounded border text-[11px] font-semibold whitespace-nowrap"
+                  style={{
+                    borderColor: pinnedRoomIds.includes(activeRoom.roomId)
+                      ? 'var(--accent-fill)' : 'var(--border)',
+                    color: pinnedRoomIds.includes(activeRoom.roomId)
+                      ? 'var(--accent-text)' : 'var(--muted)',
+                  }}>
+                  {pinnedRoomIds.includes(activeRoom.roomId) ? '★ Pinned' : '☆ Pin'}
+                </button>
+
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => exportActiveRoom('txt')} title="Export chat as TXT"
                     className="px-2 py-1 rounded border text-[11px]"
@@ -1744,12 +1729,12 @@ export default function App() {
                       ? 'Syncing'
                       : isAllOfflineInRoom
                         ? 'Offline (local queue)'
-                        : `${connectedPeers} peer${connectedPeers === 1 ? '' : 's'} connected · Epoch ${activeRoom.currentEpoch}`
+                        : `${connectedPeers} peer${connectedPeers === 1 ? '' : 's'} · E${activeRoom.currentEpoch}`
                   }
                 />
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -1758,7 +1743,7 @@ export default function App() {
                     else setSearchQuery('');
                   }}
                   title="Search room history (Ctrl+F)"
-                  className="min-h-[30px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="min-h-[26px] px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   style={{
                     borderColor: searchOpen ? 'var(--accent-fill)' : 'var(--border)',
                     color: searchOpen ? 'var(--accent-text)' : 'var(--text)',
@@ -1772,7 +1757,7 @@ export default function App() {
                   type="button"
                   onClick={() => handleToggleMute(activeRoom.roomId)}
                   title={activeRoom.muted ? 'Unmute room' : 'Mute room notifications'}
-                  className="min-h-[30px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="min-h-[26px] px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
                 >
                   {activeRoom.muted ? (
@@ -1786,7 +1771,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setScreen('room-settings')}
-                  className="min-h-[30px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="min-h-[26px] px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1796,7 +1781,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setRightPanelOpen((v) => !v)}
-                  className="min-h-[30px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="min-h-[26px] px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   style={{
                     borderColor: showRightPanel ? 'var(--accent-fill)' : 'var(--border)',
                     color: showRightPanel ? 'var(--accent-text)' : 'var(--text)',

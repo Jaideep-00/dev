@@ -104,6 +104,7 @@ export interface EpochKeyRecord {
 export interface RoomData {
   roomId: RoomId;
   name: string;
+  githubRepoUrl?: string;
   ownerId: AuthorId;
   currentEpoch: Epoch;
   joinCode: string;

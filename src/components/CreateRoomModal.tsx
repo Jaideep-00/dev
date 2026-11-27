@@ -3,7 +3,7 @@ import { Check, Copy } from 'lucide-react';
 
 interface CreateRoomModalProps {
   listenAddr: string;
-  onCreate: (name: string) => Promise<{ roomId: string; joinCode: string }>;
+  onCreate: (name: string, githubRepoUrl: string) => Promise<{ roomId: string; joinCode: string }>;
   onCancel: () => void;
   onEnterRoom: (roomId: string) => void;
 }
@@ -15,6 +15,7 @@ export function CreateRoomModal({
   onEnterRoom,
 }: CreateRoomModalProps) {
   const [name, setName] = useState('');
+  const [githubRepoUrl, setGithubRepoUrl] = useState('');
   const [error, setError] = useState('');
   const [created, setCreated] = useState<{ roomId: string; joinCode: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -27,7 +28,26 @@ export function CreateRoomModal({
       return;
     }
     setError('');
-    const result = await onCreate(trimmed);
+    const repo = githubRepoUrl.trim();
+
+    if (repo) {
+      try {
+        const parsed = new URL(repo);
+        if (
+          parsed.protocol !== 'https:' ||
+          parsed.hostname.toLowerCase() !== 'github.com' ||
+          !/^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(parsed.pathname)
+        ) {
+          setError('Enter a valid GitHub repository URL, e.g. https://github.com/owner/repo.');
+          return;
+        }
+      } catch {
+        setError('Enter a valid GitHub repository URL.');
+        return;
+      }
+    }
+
+    const result = await onCreate(trimmed, repo);
     setCreated(result);
   }
 
@@ -73,6 +93,27 @@ export function CreateRoomModal({
                 {error}
               </span>
             )}
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="block text-sm font-semibold">
+              GitHub repository (optional)
+            </span>
+            <input
+              type="url"
+              value={githubRepoUrl}
+              onChange={(e) => setGithubRepoUrl(e.target.value)}
+              placeholder="https://github.com/owner/repo"
+              className="w-full h-9 px-3 rounded-[4px] border text-sm"
+              style={{
+                backgroundColor: 'var(--bg)',
+                borderColor: 'var(--border)',
+                color: 'var(--text)',
+              }}
+            />
+            <span className="block text-xs" style={{ color: 'var(--muted)' }}>
+              This repository will be associated with this room and shared with its members.
+            </span>
           </label>
 
           <div className="flex items-center justify-end gap-2 pt-2">

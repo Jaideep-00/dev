@@ -109,6 +109,16 @@ export default function App() {
   const [screen, setScreen] = useState<ScreenKind>('room');
   const [identity, setIdentity] = useState<LocalIdentity | null>(null);
   const [rooms, setRooms] = useState<Record<RoomId, RoomData>>({});
+  // DEVCHAT_LOCAL_FEATURES_V1: local-only pinned room IDs and repository shortcut.
+  const [pinnedRoomIds, setPinnedRoomIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('devchat-pinned-rooms-v1') || '[]'); }
+    catch { return []; }
+  });
+  const [repoShortcut, setRepoShortcut] = useState(() =>
+    localStorage.getItem('devchat-repository-url-v1') || 'https://github.com/Jaideep-00/dev'
+  );
+  const [repoEditorOpen, setRepoEditorOpen] = useState(false);
+
   const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsCounters>(INITIAL_DIAGNOSTICS);
   const [discoveryStage, setDiscoveryStage] = useState<DiscoveryStage>('mdns');
@@ -154,6 +164,11 @@ export default function App() {
   // Refs for fresh state inside BroadcastChannel callback
   const stateRef = useRef({ identity, rooms, activeRoomId, screen, diagnostics, allPeersOffline });
   stateRef.current = { identity, rooms, activeRoomId, screen, diagnostics, allPeersOffline };
+
+  // DEVCHAT_LOCAL_FEATURES_V1: persist local-only sidebar preferences.
+  useEffect(() => {
+    localStorage.setItem('devchat-pinned-rooms-v1', JSON.stringify(pinnedRoomIds));
+  }, [pinnedRoomIds]);
 
   // Apply theme to document root
   useEffect(() => {
@@ -460,7 +475,56 @@ export default function App() {
     });
   }
 
-  async function handleCreateRoom(name: string): Promise<{ roomId: string; joinCode: string }> {
+  // DEVCHAT_LOCAL_FEATURES_V1
+  function togglePinnedRoom(roomId: string) {
+    setPinnedRoomIds((current) =>
+      current.includes(roomId) ? current.filter((id) => id !== roomId) : [...current, roomId]
+    );
+  }
+
+  function saveRepositoryShortcut() {
+    const value = repoShortcut.trim();
+    if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(value)) {
+      setComposerNotice('Enter a valid GitHub repository URL (https://github.com/owner/repository).');
+      return;
+    }
+    const normalized = value.replace(/\/$/, '');
+    setRepoShortcut(normalized);
+    localStorage.setItem('devchat-repository-url-v1', normalized);
+    setRepoEditorOpen(false);
+    setComposerNotice('GitHub repository shortcut saved.');
+  }
+
+  function exportActiveRoom(format: 'json' | 'txt') {
+    if (!activeRoom) return;
+    const messages = getOrderedMessages(activeRoom);
+    const payload = format === 'json'
+      ? JSON.stringify({
+          app: 'DevChat',
+          room: { id: activeRoom.roomId, name: activeRoom.name },
+          exportedAt: new Date().toISOString(),
+          messages: messages.map((m) => ({
+            id: m.id, author: m.authorName, authorId: m.authorId,
+            time: new Date(m.hlc.physicalMs).toISOString(),
+            kind: m.kind.type, body: m.body,
+          })),
+        }, null, 2)
+      : messages.map((m) =>
+          `[${new Date(m.hlc.physicalMs).toLocaleString()}] ${m.authorName}: ${m.body || (m.kind.type === 'file_offer' ? `[File: ${m.kind.name}]` : `[${m.kind.type}]`)}`
+        ).join('\n');
+    const blob = new Blob([payload], { type: format === 'json' ? 'application/json' : 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `devchat-${sanitizeWindowsFilename(activeRoom.name)}-${Date.now()}.${format}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleCreateRoom(
+    name: string,
+    githubRepoUrl: string,
+  ): Promise<{ roomId: string; joinCode: string }> {
     if (!identity) throw new Error('Identity not initialized');
     const roomId = randomRoomId();
     const joinCode = generateJoinCode();
@@ -481,6 +545,7 @@ export default function App() {
     const newRoom: RoomData = {
       roomId,
       name,
+      ...(githubRepoUrl ? { githubRepoUrl } : {}),
       ownerId: identity.authorId,
       currentEpoch: 1,
       joinCode,
@@ -1284,7 +1349,11 @@ export default function App() {
     setScreen('room');
   }
 
-  if (!ready || (!identity && screen !== 'first-run')) {
+  if (ready && !identity && screen === 'first-run') {
+    return <FirstRunScreen onComplete={handleFirstRunComplete} />;
+  }
+
+  if (!ready || !identity) {
     return (
       <div className="h-full flex items-center justify-center text-sm" style={{ color: 'var(--muted)' }}>
         Initializing local cryptographic workspace…
@@ -1390,6 +1459,20 @@ export default function App() {
                   >
                     <RoomSigil roomId={room.roomId} />
                     <span className="flex-1 truncate text-sm font-medium">{room.name}</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title={pinnedRoomIds.includes(room.roomId) ? 'Unpin room' : 'Pin room'}
+                      aria-label={pinnedRoomIds.includes(room.roomId) ? 'Unpin room' : 'Pin room'}
+                      onClick={(event) => { event.stopPropagation(); togglePinnedRoom(room.roomId); }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault(); event.stopPropagation(); togglePinnedRoom(room.roomId);
+                        }
+                      }}
+                      className="text-xs px-1 cursor-pointer"
+                      style={{ color: pinnedRoomIds.includes(room.roomId) ? 'var(--accent-text)' : 'var(--muted)' }}
+                    >{pinnedRoomIds.includes(room.roomId) ? '★' : '☆'}</span>
                     {room.muted && (
                       <BellOff
                         className="w-3 h-3 shrink-0"
@@ -1417,6 +1500,46 @@ export default function App() {
             )}
           </ul>
         </div>
+
+        {/* DEVCHAT_LOCAL_FEATURES_V1: pinned rooms and repository shortcut */}
+        <section className="shrink-0 border-t pt-2 space-y-1" style={{ borderColor: 'var(--border)' }}>
+          <div className="px-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+            Pinned rooms
+          </div>
+          {pinnedRoomIds.map((id) => {
+            const pinned = rooms[id];
+            if (!pinned) return null;
+            return (
+              <button key={id} type="button" onClick={() => selectRoom(id)}
+                className="w-full text-left px-2 py-1 rounded text-xs hover:bg-[var(--raised)] truncate"
+                style={{ color: 'var(--text)' }}>
+                ★ {pinned.name}
+              </button>
+            );
+          })}
+          {pinnedRoomIds.length === 0 && (
+            <div className="px-2 py-1 text-xs" style={{ color: 'var(--muted)' }}>Pin a room with ☆</div>
+          )}
+          <div className="flex items-center gap-1 pt-1">
+            <button type="button" onClick={() => window.open(repoShortcut, '_blank', 'noopener,noreferrer')}
+              className="flex-1 text-left px-2 py-1 rounded text-xs hover:bg-[var(--raised)]"
+              style={{ color: 'var(--accent-text)' }}>↗ GitHub repository</button>
+            <button type="button" title="Change repository URL" onClick={() => setRepoEditorOpen((v) => !v)}
+              className="px-2 py-1 rounded text-xs hover:bg-[var(--raised)]"
+              style={{ color: 'var(--muted)' }}>Edit</button>
+          </div>
+          {repoEditorOpen && (
+            <div className="space-y-1 px-1">
+              <input value={repoShortcut} onChange={(e) => setRepoShortcut(e.target.value)}
+                aria-label="GitHub repository URL" placeholder="https://github.com/owner/repo"
+                className="w-full min-w-0 px-2 py-1 rounded border text-xs"
+                style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <button type="button" onClick={saveRepositoryShortcut}
+                className="px-2 py-1 rounded text-xs font-semibold"
+                style={{ background: 'var(--accent-fill)', color: 'var(--accent-on-fill)' }}>Save URL</button>
+            </div>
+          )}
+        </section>
 
         {/* Bottom rail utility links */}
         <div className="pt-3 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
@@ -1588,6 +1711,31 @@ export default function App() {
               <div className="flex items-center gap-3 min-w-0">
                 <RoomSigil roomId={activeRoom.roomId} />
                 <h1 className="text-[20px] font-semibold m-0 truncate">{activeRoom.name}</h1>
+                {activeRoom.githubRepoUrl && (
+                  <a
+                    href={activeRoom.githubRepoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open this room's GitHub repository"
+                    className="min-h-[28px] px-2.5 py-1 text-xs font-semibold rounded-[4px] border inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    style={{
+                      borderColor: 'var(--border)',
+                      color: 'var(--accent-text)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span aria-hidden="true">↗</span>
+                    <span>GitHub</span>
+                  </a>
+                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={() => exportActiveRoom('txt')} title="Export chat as TXT"
+                    className="px-2 py-1 rounded border text-[11px]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>TXT</button>
+                  <button type="button" onClick={() => exportActiveRoom('json')} title="Export chat as JSON"
+                    className="px-2 py-1 rounded border text-[11px]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>JSON</button>
+                </div>
                 <StatusDot
                   state={getRoomSyncState(activeRoom)}
                   showLabel

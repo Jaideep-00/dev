@@ -191,6 +191,7 @@ pub fn run() {
     let lan_mesh_setup = Arc::clone(&lan_mesh);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState {
             store: Mutex::new(store),
             db_path,

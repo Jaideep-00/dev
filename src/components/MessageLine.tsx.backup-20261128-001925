@@ -1,0 +1,254 @@
+import { useState } from 'react';
+import { Check, Copy, Download, FileCode2, ShieldCheck, Pin } from 'lucide-react';
+import { formatHlcTime } from '../engine/clock';
+import { formatBytes } from '../engine/safety';
+import type { Message } from '../engine/types';
+
+interface MessageLineProps {
+  msg: Message;
+  isSelf: boolean;
+  showDelivery: boolean;
+  totalActive: number;
+  hasGapBefore: boolean;
+  highlightQuery?: string;
+  onFetchFile: (msg: Message) => void;
+  isPinnedTask: boolean;
+  onTogglePinnedTask: () => void;
+}
+
+function renderHighlightedText(text: string, query?: string) {
+  if (!query || !query.trim()) return text;
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, idx) =>
+    part.toLowerCase() === query.trim().toLowerCase() ? (
+      <mark
+        key={idx}
+        className="px-0.5 rounded-[2px]"
+        style={{ backgroundColor: 'var(--accent-fill)', color: 'var(--accent-on-fill)' }}
+      >
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
+export function MessageLine({
+  msg,
+  isSelf,
+  showDelivery,
+  totalActive,
+  hasGapBefore,
+  highlightQuery,
+  onFetchFile,
+  isPinnedTask,
+  onTogglePinnedTask,
+}: MessageLineProps) {
+  const [copied, setCopied] = useState(false);
+  const [inspectOpen, setInspectOpen] = useState(false);
+
+  const isSystem =
+    msg.kind.type === 'system_join' ||
+    msg.kind.type === 'system_removal' ||
+    msg.kind.type === 'system_code_reset';
+
+  async function handleCopyCode() {
+    try {
+      await navigator.clipboard.writeText(msg.body);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // clipboard blocked in sandbox fallback
+    }
+  }
+
+  return (
+    <div>
+      {hasGapBefore && (
+        <div
+          role="status"
+          className="mx-4 my-1.5 px-3 py-1.5 text-xs rounded-[4px] border flex items-center justify-between gap-2"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--warning)',
+            color: 'var(--warning)',
+          }}
+        >
+          <span>
+            Waiting for earlier messages from {msg.authorName} (sequence gap detected; requesting via Want)…
+          </span>
+          <span className="font-mono text-[11px] shrink-0">seq #{msg.sequence}</span>
+        </div>
+      )}
+
+      <article
+        id={`message-${msg.id}`}
+        className="group grid grid-cols-[52px_124px_1fr] gap-2 px-4 py-1.5 items-baseline transition-colors duration-100 hover:bg-[var(--surface)]"
+      >
+        <button
+          type="button"
+          onClick={() => setInspectOpen((v) => !v)}
+          title="Inspect cryptographic envelope (HLC, epoch, signature)"
+          className="font-mono text-xs text-left tabular-nums cursor-pointer hover:underline"
+          style={{ color: 'var(--muted)' }}
+        >
+          {formatHlcTime(msg.hlc)}
+        </button>
+
+        <span
+          className="font-semibold truncate text-[14px]"
+          style={{
+            color: isSystem
+              ? 'var(--muted)'
+              : isSelf
+                ? 'var(--accent-text)'
+                : 'var(--text)',
+          }}
+          title={`${msg.authorName} (${msg.authorId.slice(0, 8)})`}
+        >
+          {isSystem ? 'system' : msg.authorName}
+        </span>
+
+        <div className="min-w-0">
+          {!isSystem && (
+            <div className="flex justify-end mb-0.5">
+              <button
+                type="button"
+                onClick={onTogglePinnedTask}
+                title={isPinnedTask ? 'Remove pinned task' : 'Pin as project task'}
+                aria-pressed={isPinnedTask}
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border cursor-pointer opacity-70 hover:opacity-100"
+                style={{
+                  borderColor: isPinnedTask ? 'var(--accent-fill)' : 'var(--border)',
+                  color: isPinnedTask ? 'var(--accent-text)' : 'var(--muted)',
+                }}>
+                <Pin className="w-3 h-3" />
+                {isPinnedTask ? 'Task pinned' : 'Pin task'}
+              </button>
+            </div>
+          )}
+          {msg.kind.type === 'code' ? (
+            <div
+              className="my-0.5 rounded-[4px] border overflow-hidden"
+              style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              <div
+                className="flex items-center justify-between px-3 py-1 border-b text-xs font-mono"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <FileCode2 className="w-3.5 h-3.5" />
+                  <span>{msg.kind.language || 'plaintext'}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] hover:bg-[var(--raised)] transition-colors cursor-pointer"
+                  style={{ color: copied ? 'var(--success)' : 'var(--text)' }}
+                >
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+              <pre className="m-0 p-2.5 overflow-x-auto text-[13px] leading-[19px] font-mono">
+                <code>
+                  {msg.body.split('\n').map((line, i) => (
+                    <div key={i} className="table-row">
+                      <span
+                        className="table-cell pr-3 select-none text-right tabular-nums"
+                        style={{ color: 'var(--muted)', minWidth: '28px' }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="table-cell whitespace-pre">
+                        {renderHighlightedText(line, highlightQuery)}
+                      </span>
+                    </div>
+                  ))}
+                </code>
+              </pre>
+            </div>
+          ) : msg.kind.type === 'file_offer' ? (
+            <div className="space-y-1.5">
+              {msg.body && (
+                <p className="m-0 whitespace-pre-wrap break-words">
+                  {renderHighlightedText(msg.body, highlightQuery)}
+                </p>
+              )}
+              <div
+                className="inline-flex flex-wrap items-center gap-3 px-3 py-2 rounded-[4px] border max-w-full"
+                style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="min-w-0">
+                  <div className="font-mono text-[13px] font-semibold truncate">
+                    {msg.kind.name}
+                  </div>
+                  <div className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>
+                    {formatBytes(msg.kind.size)} · SHA-256 {msg.kind.hash.slice(0, 12)} ·{' '}
+                    {msg.kind.state === 'stored'
+                      ? 'Saved locally'
+                      : msg.kind.state === 'fetching'
+                        ? 'Fetching chunks…'
+                        : 'Offered (never auto-opened)'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onFetchFile(msg)}
+                  disabled={msg.kind.state === 'fetching'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[4px] border whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
+                  style={{
+                    borderColor: 'var(--border)',
+                    backgroundColor: 'var(--raised)',
+                    color: 'var(--text)',
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{msg.kind.state === 'stored' ? 'Save copy' : 'Fetch file'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`whitespace-pre-wrap break-words ${isSystem ? 'italic text-[13px]' : ''}`}
+              style={{ color: isSystem ? 'var(--muted)' : 'var(--text)' }}
+            >
+              {renderHighlightedText(msg.body, highlightQuery)}
+            </div>
+          )}
+
+          {showDelivery && !isSystem && (
+            <div className="mt-0.5 text-xs tabular-nums" style={{ color: 'var(--muted)' }}>
+              delivered to {Math.min(msg.deliveredTo, totalActive)} of {totalActive}
+            </div>
+          )}
+
+          {inspectOpen && (
+            <div
+              className="mt-2 p-2.5 rounded-[4px] border font-mono text-[11px] space-y-1"
+              style={{
+                backgroundColor: 'var(--surface)',
+                borderColor: 'var(--border)',
+                color: 'var(--muted)',
+              }}
+            >
+              <div className="flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>ECDSA P-256 signature verified · AES-256-GCM encrypted</span>
+              </div>
+              <div>
+                epoch: {msg.epoch} · seq: {msg.sequence} · hlc: {msg.hlc.physicalMs}:
+                {msg.hlc.logical}
+              </div>
+              <div className="truncate">author_key: {msg.authorId}</div>
+              <div className="truncate">ciphertext: {msg.ciphertextHex.slice(0, 56)}…</div>
+              <div className="truncate">signature: {msg.signatureHex.slice(0, 56)}…</div>
+            </div>
+          )}
+        </div>
+      </article>
+    </div>
+  );
+}

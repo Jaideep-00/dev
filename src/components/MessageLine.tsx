@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Copy, Download, FileCode2, ShieldCheck } from 'lucide-react';
+import { Check, Copy, Download, FileCode2, ShieldCheck, Pin } from 'lucide-react';
 import { formatHlcTime } from '../engine/clock';
 import { formatBytes } from '../engine/safety';
 import type { Message } from '../engine/types';
@@ -12,6 +12,10 @@ interface MessageLineProps {
   hasGapBefore: boolean;
   highlightQuery?: string;
   onFetchFile: (msg: Message) => void;
+  isPinnedTask: boolean;
+  onTogglePinnedTask: () => void;
+  isPinnedMessage: boolean;
+  onTogglePinnedMessage: () => void;
 }
 
 function renderHighlightedText(text: string, query?: string) {
@@ -41,6 +45,10 @@ export function MessageLine({
   hasGapBefore,
   highlightQuery,
   onFetchFile,
+  isPinnedTask,
+  onTogglePinnedTask,
+  isPinnedMessage,
+  onTogglePinnedMessage,
 }: MessageLineProps) {
   const [copied, setCopied] = useState(false);
   const [inspectOpen, setInspectOpen] = useState(false);
@@ -80,6 +88,7 @@ export function MessageLine({
       )}
 
       <article
+        id={`message-${msg.id}`}
         className="group grid grid-cols-[52px_124px_1fr] gap-2 px-4 py-1.5 items-baseline transition-colors duration-100 hover:bg-[var(--surface)]"
       >
         <button
@@ -107,6 +116,37 @@ export function MessageLine({
         </span>
 
         <div className="min-w-0">
+          {!isSystem && (
+            <div className="flex justify-end mb-0.5">
+              <button
+                type="button"
+                onClick={onTogglePinnedTask}
+                title={isPinnedTask ? 'Remove pinned task' : 'Pin as project task'}
+                aria-pressed={isPinnedTask}
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border cursor-pointer opacity-70 hover:opacity-100"
+                style={{
+                  borderColor: isPinnedTask ? 'var(--accent-fill)' : 'var(--border)',
+                  color: isPinnedTask ? 'var(--accent-text)' : 'var(--muted)',
+                }}>
+                <Pin className="w-3 h-3" />
+                {isPinnedTask ? 'Task pinned' : 'Pin task'}
+              </button>
+              <button
+                type="button"
+                onClick={onTogglePinnedMessage}
+                title={isPinnedMessage ? 'Unpin message' : 'Pin message'}
+                aria-pressed={isPinnedMessage}
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border cursor-pointer opacity-70 hover:opacity-100"
+                style={{
+                  borderColor: isPinnedMessage ? 'var(--accent-fill)' : 'var(--border)',
+                  color: isPinnedMessage ? 'var(--accent-text)' : 'var(--muted)',
+                }}
+              >
+                <Pin className="w-3 h-3" />
+                {isPinnedMessage ? 'Pinned' : 'Pin message'}
+              </button>
+            </div>
+          )}
           {msg.kind.type === 'code' ? (
             <div
               className="my-0.5 rounded-[4px] border overflow-hidden"

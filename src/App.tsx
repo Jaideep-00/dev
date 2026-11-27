@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Activity,
   Bell,
@@ -109,14 +110,81 @@ export default function App() {
   const [screen, setScreen] = useState<ScreenKind>('room');
   const [identity, setIdentity] = useState<LocalIdentity | null>(null);
   const [rooms, setRooms] = useState<Record<RoomId, RoomData>>({});
-  // DEVCHAT_LOCAL_FEATURES_V1: local-only pinned room IDs and repository shortcut.
-  const [pinnedRoomIds, setPinnedRoomIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('devchat-pinned-rooms-v1') || '[]'); }
-    catch { return []; }
-  });
   const [repoShortcut] = useState(() =>
     localStorage.getItem('devchat-repository-url-v1') || 'https://github.com/Jaideep-00/dev'
   );
+
+
+  type PinnedTask = {
+    roomId: string;
+    messageId: string;
+    assignedTo: string;
+    status: 'To do' | 'In progress' | 'Done';
+  };
+
+  const [pinnedTasks, setPinnedTasks] = useState<PinnedTask[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('devchat-pinned-tasks-v1') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('devchat-pinned-tasks-v1', JSON.stringify(pinnedTasks));
+  }, [pinnedTasks]);
+
+  function togglePinnedTask(message: Message) {
+    setPinnedTasks((current) => {
+      const exists = current.some((task) => task.messageId === message.id);
+      if (exists) {
+        return current.filter((task) => task.messageId !== message.id);
+      }
+      return [
+        ...current,
+        {
+          roomId: message.roomId,
+          messageId: message.id,
+          assignedTo: message.authorId,
+          status: 'To do',
+        },
+      ];
+    });
+  }
+
+  function updatePinnedTask(messageId: string, patch: Partial<PinnedTask>) {
+    setPinnedTasks((current) =>
+      current.map((task) =>
+        task.messageId === messageId ? { ...task, ...patch } : task
+      )
+    );
+  }
+
+  function jumpToPinnedTask(task: PinnedTask) {
+    if (!rooms[task.roomId]) return;
+    selectRoom(task.roomId);
+    window.setTimeout(() => {
+      document.getElementById(`message-${CSS.escape(task.messageId)}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+  }
+
+  // Local-only pinned messages, stored separately for each room.
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<Record<string, string[]>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('devchat-pinned-messages-v1') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [pinnedMessageIndex, setPinnedMessageIndex] = useState(0);
+
+  useEffect(() => {
+    localStorage.setItem(
+      'devchat-pinned-messages-v1',
+      JSON.stringify(pinnedMessageIds)
+    );
+  }, [pinnedMessageIds]);
 
   const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsCounters>(INITIAL_DIAGNOSTICS);
@@ -163,11 +231,6 @@ export default function App() {
   // Refs for fresh state inside BroadcastChannel callback
   const stateRef = useRef({ identity, rooms, activeRoomId, screen, diagnostics, allPeersOffline });
   stateRef.current = { identity, rooms, activeRoomId, screen, diagnostics, allPeersOffline };
-
-  // DEVCHAT_LOCAL_FEATURES_V1: persist local-only sidebar preferences.
-  useEffect(() => {
-    localStorage.setItem('devchat-pinned-rooms-v1', JSON.stringify(pinnedRoomIds));
-  }, [pinnedRoomIds]);
 
   // Apply theme to document root
   useEffect(() => {
@@ -422,15 +485,65 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [screen, activeRoomId, searchOpen]);
 
+  // Store pinned rooms locally.
+  const [pinnedRoomIds, setPinnedRoomIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('devchat-pinned-rooms-v1') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      'devchat-pinned-rooms-v1',
+      JSON.stringify(pinnedRoomIds)
+    );
+  }, [pinnedRoomIds]);
+
   const roomList = useMemo(
     () => Object.values(rooms).sort((a, b) => a.joinedAtMs - b.joinedAtMs),
     [rooms],
   );
+
+  // WhatsApp-style ordering: pinned rooms first.
+  const sortedRoomList = useMemo(() => {
+    const pinned = new Set(pinnedRoomIds);
+
+    return [...roomList].sort((a, b) => {
+      const aPinned = pinned.has(a.roomId);
+      const bPinned = pinned.has(b.roomId);
+
+      if (aPinned !== bPinned) {
+        return aPinned ? -1 : 1;
+      }
+
+      return a.joinedAtMs - b.joinedAtMs;
+    });
+  }, [roomList, pinnedRoomIds]);
+
+  const pinnedRoomCount = sortedRoomList.filter(
+    (room) => pinnedRoomIds.includes(room.roomId)
+  ).length;
+
   const activeRoom = activeRoomId ? rooms[activeRoomId] ?? null : null;
   const orderedMessages = useMemo(
     () => (activeRoom ? getOrderedMessages(activeRoom) : []),
     [activeRoom],
   );
+  const activePinnedMessages = activeRoom
+    ? orderedMessages.filter((message) =>
+        (pinnedMessageIds[activeRoom.roomId] || []).includes(message.id)
+      )
+    : [];
+
+  const currentPinnedMessage =
+    activePinnedMessages.length > 0
+      ? activePinnedMessages[
+          pinnedMessageIndex % activePinnedMessages.length
+        ]
+      : null;
+
   const filteredMessages = useMemo(() => {
     if (!searchOpen || !searchQuery.trim()) return orderedMessages;
     const q = searchQuery.trim().toLowerCase();
@@ -474,11 +587,28 @@ export default function App() {
     });
   }
 
-  // DEVCHAT_LOCAL_FEATURES_V1
-  function togglePinnedRoom(roomId: string) {
-    setPinnedRoomIds((current) =>
-      current.includes(roomId) ? current.filter((id) => id !== roomId) : [...current, roomId]
-    );
+  function togglePinnedMessage(messageId: string) {
+    if (!activeRoom) return;
+
+    setPinnedMessageIds((current) => {
+      const existing = current[activeRoom.roomId] || [];
+      const updated = existing.includes(messageId)
+        ? existing.filter((id) => id !== messageId)
+        : [...existing, messageId];
+
+      return {
+        ...current,
+        [activeRoom.roomId]: updated,
+      };
+    });
+
+    setPinnedMessageIndex(0);
+  }
+
+  function jumpToPinnedMessage(messageId: string) {
+    document
+      .getElementById(`message-${messageId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function exportActiveRoom(format: 'json' | 'txt') {
@@ -1421,29 +1551,67 @@ export default function App() {
           </button>
         </div>
 
-        <section className="shrink-0 border-b pb-2 space-y-1"
+        <section className="shrink-0 border-b pb-2 space-y-2"
           style={{ borderColor: 'var(--border)' }}>
           <div className="px-1 text-xs font-semibold flex items-center justify-between"
             style={{ color: 'var(--muted)' }}>
-            <span>Pinned chats</span>
-            <span className="font-mono">{pinnedRoomIds.length}</span>
+            <span>Pinned tasks</span>
+            <span className="font-mono">{pinnedTasks.length}</span>
           </div>
-          {pinnedRoomIds.map((id) => {
-            const pinned = rooms[id];
-            if (!pinned) return null;
-            return (
-              <button key={id} type="button" onClick={() => selectRoom(id)}
-                className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-[var(--raised)] truncate"
-                style={{ color: 'var(--accent-text)' }}>
-                ★ {pinned.name}
-              </button>
-            );
-          })}
-          {pinnedRoomIds.length === 0 && (
-            <div className="px-2 py-1 text-xs" style={{ color: 'var(--muted)' }}>
-              Use ☆ beside a room to pin it
-            </div>
-          )}
+
+          <div className="max-h-[220px] overflow-y-auto space-y-1">
+            {pinnedTasks.map((task) => {
+              const room = rooms[task.roomId];
+              const message = room?.messages[task.messageId];
+              const assigned = room?.members[task.assignedTo];
+              if (!room || !message) return null;
+
+              return (
+                <div key={task.messageId}
+                  className="rounded border p-2 space-y-1.5"
+                  style={{ borderColor: 'var(--border)' }}>
+                  <button type="button"
+                    onClick={() => jumpToPinnedTask(task)}
+                    className="w-full text-left text-xs font-medium truncate cursor-pointer"
+                    style={{ color: 'var(--text)' }}
+                    title={message.body}>
+                    {message.body || `[${message.kind.type}]`}
+                  </button>
+                  <div className="text-[10px] truncate"
+                    style={{ color: 'var(--muted)' }}>
+                    {room.name} · {assigned?.displayName || 'Unassigned'}
+                  </div>
+                  <div className="flex gap-1">
+                    <select
+                      aria-label="Assign task"
+                      value={task.assignedTo}
+                      onChange={(e) => updatePinnedTask(task.messageId, { assignedTo: e.target.value })}
+                      className="min-w-0 flex-1 text-[10px] rounded border px-1 py-1"
+                      style={{ backgroundColor: 'var(--bg)', color: 'var(--text)', borderColor: 'var(--border)' }}>
+                      {Object.values(room.members).filter((member) => member.status === 'active').map((member) => (
+                        <option key={member.id} value={member.id}>{member.displayName}</option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Task status"
+                      value={task.status}
+                      onChange={(e) => updatePinnedTask(task.messageId, { status: e.target.value as PinnedTask['status'] })}
+                      className="min-w-0 flex-1 text-[10px] rounded border px-1 py-1"
+                      style={{ backgroundColor: 'var(--bg)', color: 'var(--text)', borderColor: 'var(--border)' }}>
+                      <option>To do</option>
+                      <option>In progress</option>
+                      <option>Done</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+            {pinnedTasks.length === 0 && (
+              <p className="px-2 py-1 text-[11px]" style={{ color: 'var(--muted)' }}>
+                Use Pin task on a message to add project work here.
+              </p>
+            )}
+          </div>
         </section>
 
         <div className="flex-1 min-h-0 flex flex-col">
@@ -1451,11 +1619,23 @@ export default function App() {
             Joined rooms
           </div>
           <ul role="listbox" aria-label="Joined rooms" className="m-0 p-0 list-none space-y-1 overflow-y-auto flex-1">
-            {roomList.map((room) => {
+            {sortedRoomList.map((room, index) => {
               const selected = screen === 'room' && room.roomId === activeRoomId;
               const syncState = getRoomSyncState(room);
               return (
-                <li key={room.roomId}>
+                <li
+                  key={room.roomId}
+                  className={
+                    index === pinnedRoomCount && pinnedRoomCount > 0
+                      ? 'mt-2 pt-2 border-t'
+                      : ''
+                  }
+                  style={
+                    index === pinnedRoomCount && pinnedRoomCount > 0
+                      ? { borderColor: 'var(--border)' }
+                      : undefined
+                  }
+                >
                   <button
                     type="button"
                     role="option"
@@ -1470,20 +1650,6 @@ export default function App() {
                   >
                     <RoomSigil roomId={room.roomId} />
                     <span className="flex-1 truncate text-sm font-medium">{room.name}</span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      title={pinnedRoomIds.includes(room.roomId) ? 'Unpin room' : 'Pin room'}
-                      aria-label={pinnedRoomIds.includes(room.roomId) ? 'Unpin room' : 'Pin room'}
-                      onClick={(event) => { event.stopPropagation(); togglePinnedRoom(room.roomId); }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault(); event.stopPropagation(); togglePinnedRoom(room.roomId);
-                        }
-                      }}
-                      className="text-xs px-1 cursor-pointer"
-                      style={{ color: pinnedRoomIds.includes(room.roomId) ? 'var(--accent-text)' : 'var(--muted)' }}
-                    >{pinnedRoomIds.includes(room.roomId) ? '★' : '☆'}</span>
                     {room.muted && (
                       <BellOff
                         className="w-3 h-3 shrink-0"
@@ -1682,37 +1848,16 @@ export default function App() {
               <div className="flex items-center gap-2 min-w-0">
                 <RoomSigil roomId={activeRoom.roomId} />
                 <h1 className="text-[18px] font-semibold m-0 truncate">{activeRoom.name}</h1>
-                <a
-                  href={activeRoom.githubRepoUrl || repoShortcut}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open GitHub repository"
+                <button
+                  type="button"
+                  onClick={() => void openUrl(activeRoom.githubRepoUrl || repoShortcut)}
+                  title="Open GitHub repository in your default browser"
                   className="min-h-[26px] px-2 py-1 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                  style={{
-                    borderColor: 'var(--border)',
-                    color: 'var(--accent-text)',
-                    textDecoration: 'none',
-                  }}
+                  style={{ borderColor: 'var(--border)', color: 'var(--accent-text)' }}
                 >
                   <span aria-hidden="true">↗</span>
                   <span>GitHub</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => togglePinnedRoom(activeRoom.roomId)}
-                  title={pinnedRoomIds.includes(activeRoom.roomId)
-                    ? 'Unpin this chat' : 'Pin this chat'}
-                  aria-pressed={pinnedRoomIds.includes(activeRoom.roomId)}
-                  className="px-2 py-1 rounded border text-[11px] font-semibold whitespace-nowrap"
-                  style={{
-                    borderColor: pinnedRoomIds.includes(activeRoom.roomId)
-                      ? 'var(--accent-fill)' : 'var(--border)',
-                    color: pinnedRoomIds.includes(activeRoom.roomId)
-                      ? 'var(--accent-text)' : 'var(--muted)',
-                  }}>
-                  {pinnedRoomIds.includes(activeRoom.roomId) ? '★ Pinned' : '☆ Pin'}
                 </button>
-
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => exportActiveRoom('txt')} title="Export chat as TXT"
                     className="px-2 py-1 rounded border text-[11px]"
@@ -1792,6 +1937,82 @@ export default function App() {
                 </button>
               </div>
             </header>
+
+            {/* Pinned Messages Banner */}
+            {currentPinnedMessage && (
+              <div
+                className="px-4 py-2 border-b flex items-center gap-3 shrink-0"
+                style={{
+                  backgroundColor: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => jumpToPinnedMessage(currentPinnedMessage.id)}
+                  className="flex-1 min-w-0 text-left cursor-pointer"
+                  title="Jump to pinned message"
+                >
+                  <div
+                    className="text-[10px] font-semibold uppercase tracking-wide"
+                    style={{ color: 'var(--accent-text)' }}
+                  >
+                    <span>📌 Pinned message</span>
+                    <span className="ml-2" style={{ color: 'var(--muted)' }}>
+                      {pinnedMessageIndex + 1}/{activePinnedMessages.length}
+                    </span>
+                  </div>
+                  <div
+                    className="text-xs truncate mt-0.5"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {currentPinnedMessage.authorName}: {currentPinnedMessage.body || `[${currentPinnedMessage.kind.type}]`}
+                  </div>
+                </button>
+
+                {activePinnedMessages.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPinnedMessageIndex((i) =>
+                          (i - 1 + activePinnedMessages.length) %
+                          activePinnedMessages.length
+                        )
+                      }
+                      title="Previous pinned message"
+                      className="px-2 py-1 rounded border text-xs cursor-pointer"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPinnedMessageIndex((i) =>
+                          (i + 1) % activePinnedMessages.length
+                        )
+                      }
+                      title="Next pinned message"
+                      className="px-2 py-1 rounded border text-xs cursor-pointer"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                    >
+                      ›
+                    </button>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => togglePinnedMessage(currentPinnedMessage.id)}
+                  title="Unpin message"
+                  className="px-2 py-1 rounded border text-xs cursor-pointer"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                >
+                  Unpin
+                </button>
+              </div>
+            )}
 
             {/* Offline Banner */}
             {isAllOfflineInRoom && (
@@ -1924,6 +2145,10 @@ export default function App() {
                       hasGapBefore={hasGapBefore}
                       highlightQuery={searchOpen ? searchQuery : undefined}
                       onFetchFile={handleFetchFile}
+            isPinnedMessage={(pinnedMessageIds[activeRoom.roomId] || []).includes(msg.id)}
+            onTogglePinnedMessage={() => togglePinnedMessage(msg.id)}
+                      isPinnedTask={pinnedTasks.some((task) => task.messageId === msg.id)}
+                      onTogglePinnedTask={() => togglePinnedTask(msg)}
                     />
                   );
                 })

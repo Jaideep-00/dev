@@ -1,0 +1,112 @@
+﻿Folder PATH listing for volume Disk
+Volume serial number is 0248-56DD
+D:\PROJECT\DEVCHAT\.GITHUB
+\---workflows
+        windows.yml
+        
+Folder PATH listing for volume Disk
+Volume serial number is 0248-56DD
+D:\PROJECT\DEVCHAT\CRATES
++---devchat-core
+|   |   Cargo.toml
+|   |   Cargo.toml.backup
+|   |   
+|   \---src
+|           clock.rs
+|           join_code.rs
+|           lib.rs
+|           safety.rs
+|           sync.rs
+|           types.rs
+|           
++---devchat-crypto
+|   |   Cargo.toml
+|   |   Cargo.toml.backup
+|   |   
+|   \---src
+|           dpapi.rs
+|           lib.rs
+|           
++---devchat-net
+|   |   Cargo.toml
+|   |   Cargo.toml.backup
+|   |   
+|   \---src
+|           lib.rs
+|           lib.rs.backup
+|           
+\---devchat-store
+    |   Cargo.toml
+    |   Cargo.toml.backup
+    |   
+    \---src
+            lib.rs
+            
+Folder PATH listing for volume Disk
+Volume serial number is 0248-56DD
+D:\PROJECT\DEVCHAT\DIST
+|   index.html
+|   
+\---assets
+        index-CKLI54cD.js
+        index-CQqj4UOR.css
+        
+Folder PATH listing for volume Disk
+Volume serial number is 0248-56DD
+D:\PROJECT\DEVCHAT\SRC
+|   App.tsx
+|   index.css
+|   main.tsx
+|   
++---components
+|       CommandPalette.tsx
+|       CreateRoomModal.tsx
+|       DiagnosticsScreen.tsx
+|       FirstRunScreen.tsx
+|       JoinRoomModal.tsx
+|       MessageLine.tsx
+|       RoomSettingsScreen.tsx
+|       RoomSigil.tsx
+|       SettingsScreen.tsx
+|       ShortcutsDialog.tsx
+|       StatusDot.tsx
+|       
+\---engine
+        clock.ts
+        crypto.ts
+        joinCode.ts
+        lanChannel.ts
+        safety.ts
+        seed.ts
+        sync.ts
+        tauriBridge.ts
+        types.ts
+        
+Folder PATH listing for volume Disk
+Volume serial number is 0248-56DD
+D:\PROJECT\DEVCHAT\SRC-TAURI
+|   build.rs
+|   Cargo.toml
+|   tauri.conf.json
+|   
++---capabilities
+|       default.json
+|       
++---gen
+|   \---schemas
+|           acl-manifests.json
+|           capabilities.json
+|           desktop-schema.json
+|           windows-schema.json
+|           
++---icons
+|       128x128.png
+|       128x128@2x.png
+|       32x32.png
+|       icon.ico
+|       icon.png
+|       
+\---src
+        lib.rs
+        main.rs
+        

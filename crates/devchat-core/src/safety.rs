@@ -30,11 +30,7 @@ pub fn sanitize_windows_filename(raw: &str) -> String {
         .chars()
         .filter(|&c| {
             let code = c as u32;
-            code >= 0x20
-                && !matches!(
-                    c,
-                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
-                )
+            code >= 0x20 && !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
         })
         .collect();
 
@@ -46,11 +42,7 @@ pub fn sanitize_windows_filename(raw: &str) -> String {
         return "received-file".to_string();
     }
 
-    let stem = cleaned
-        .split('.')
-        .next()
-        .unwrap_or("")
-        .to_ascii_uppercase();
+    let stem = cleaned.split('.').next().unwrap_or("").to_ascii_uppercase();
     if RESERVED_DEVICES.contains(&stem.as_str()) {
         cleaned = format!("_{cleaned}");
     }
@@ -136,7 +128,10 @@ mod tests {
         assert_eq!(sanitize_windows_filename("..\\..\\evil.exe"), "evil.exe");
         assert_eq!(sanitize_windows_filename("CON.txt"), "_CON.txt");
         assert_eq!(sanitize_windows_filename("NUL"), "_NUL");
-        assert_eq!(sanitize_windows_filename("C:\\Users\\a\\report?.pdf.. "), "report.pdf");
+        assert_eq!(
+            sanitize_windows_filename("C:\\Users\\a\\report?.pdf.. "),
+            "report.pdf"
+        );
         assert_eq!(sanitize_windows_filename("..."), "received-file");
     }
 

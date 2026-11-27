@@ -1,7 +1,7 @@
-use std::path::Path;
 use devchat_crypto::dpapi::{protect_secret, unprotect_secret};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -191,7 +191,12 @@ mod tests {
         assert_eq!(loaded, r#"{"theme":"dark"}"#);
 
         store
-            .index_message("a:1", "room-1", "Jaideep", "Compiled Rust SQLite FTS5 index cleanly")
+            .index_message(
+                "a:1",
+                "room-1",
+                "Jaideep",
+                "Compiled Rust SQLite FTS5 index cleanly",
+            )
             .unwrap();
         let hits = store.search_room_fts("room-1", "SQLite", 10).unwrap();
         assert_eq!(hits.len(), 1);

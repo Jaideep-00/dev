@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet};
-use serde::{Deserialize, Serialize};
 use crate::types::{AuthorId, RoomId, Sequence};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,10 +50,7 @@ pub fn record_sequence(state: &mut AuthorLogState, seq: Sequence) -> bool {
     }
 
     state.out_of_order.insert(seq);
-    while state
-        .out_of_order
-        .remove(&(state.highest_contiguous + 1))
-    {
+    while state.out_of_order.remove(&(state.highest_contiguous + 1)) {
         state.highest_contiguous += 1;
     }
     true
@@ -81,9 +78,7 @@ pub fn compute_wants(
         let mut cursor = start_from;
         while cursor <= remote_tip && remaining > 0 {
             // Skip sequences already stored out-of-order
-            while cursor <= remote_tip
-                && local.is_some_and(|l| l.out_of_order.contains(&cursor))
-            {
+            while cursor <= remote_tip && local.is_some_and(|l| l.out_of_order.contains(&cursor)) {
                 cursor += 1;
             }
             if cursor > remote_tip {

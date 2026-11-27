@@ -1,44 +1,69 @@
 
 from pathlib import Path
-import shutil
 
 ROOT = Path(__file__).resolve().parent
+SOURCE = ROOT / "src"
 
-FILES = [
-    ROOT / "crates" / "devchat-net" / "Cargo.toml",
-    ROOT / "crates" / "devchat-store" / "Cargo.toml",
+KEYWORDS = [
+    "overflow",
+    "overflow-y",
+    "overflow-anchor",
+    "min-height",
+    "max-height",
+    "height:",
+    "flex:",
+    "flex-direction",
+    "justify-content",
+    "align-items",
+    "position:",
+    "scroll",
 ]
 
-ENTRY = "serde_json.workspace = true"
+EXTENSIONS = {".css", ".tsx", ".ts"}
 
-for file in FILES:
-    if not file.exists():
-        print(f"[SKIP] Not found: {file}")
-        continue
+def main():
+    print("DEVCHAT UI LAYOUT INSPECTION")
+    print("=" * 60)
 
-    content = file.read_text(encoding="utf-8")
-    lines = content.splitlines(keepends=True)
+    if not SOURCE.exists():
+        print("ERROR: src folder not found.")
+        return
 
-    updated_lines = [
-        line for line in lines
-        if line.strip() != ENTRY
-    ]
+    found = False
 
-    if len(updated_lines) == len(lines):
-        print(f"[SKIP] Entry not found: {file.name}")
-        continue
+    for path in SOURCE.rglob("*"):
+        if not path.is_file() or path.suffix not in EXTENSIONS:
+            continue
 
-    backup = file.with_suffix(".toml.backup")
+        if any(part in {"node_modules", "dist", "build"}
+               for part in path.parts):
+            continue
 
-    if not backup.exists():
-        shutil.copy2(file, backup)
+        try:
+            lines = path.read_text(
+                encoding="utf-8",
+                errors="replace"
+            ).splitlines()
+        except OSError:
+            continue
 
-    file.write_text(
-        "".join(updated_lines),
-        encoding="utf-8"
-    )
+        matches = [
+            (i, line.strip())
+            for i, line in enumerate(lines, 1)
+            if any(word in line.lower() for word in KEYWORDS)
+        ]
 
-    print(f"[FIXED] {file.relative_to(ROOT)}")
+        if matches:
+            found = True
+            print(f"\nFILE: {path.relative_to(ROOT)}")
 
-print("\nDone. Verify with:")
-print("cargo test --workspace")
+            for number, line in matches:
+                print(f"  {number}: {line}")
+
+    if not found:
+        print("No matching layout styles found.")
+
+    print("\nInspection completed.")
+
+if __name__ == "__main__":
+    main()

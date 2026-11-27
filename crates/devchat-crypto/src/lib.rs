@@ -116,7 +116,8 @@ pub fn encrypt_room_payload(
     let mut key_bytes = base64::engine::general_purpose::STANDARD
         .decode(key_base64)
         .map_err(|_| CryptoError::InvalidKey)?;
-    let cipher = XChaCha20Poly1305::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
+    let cipher =
+        XChaCha20Poly1305::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
     key_bytes.zeroize();
 
     let mut nonce_bytes = [0u8; 24];
@@ -147,7 +148,8 @@ pub fn decrypt_room_payload(
     let mut key_bytes = base64::engine::general_purpose::STANDARD
         .decode(key_base64)
         .map_err(|_| CryptoError::InvalidKey)?;
-    let cipher = XChaCha20Poly1305::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
+    let cipher =
+        XChaCha20Poly1305::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
     key_bytes.zeroize();
 
     let combined = hex::decode(ciphertext_hex).map_err(|_| CryptoError::DecryptionFailed)?;
@@ -170,7 +172,8 @@ pub fn derive_discovery_token(key_base64: &str, unix_secs: u64) -> Result<String
     let bucket = unix_secs / 300;
     let label = format!("devchat-discovery-v1:{bucket}");
 
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
+    let mut mac =
+        <HmacSha256 as Mac>::new_from_slice(&key_bytes).map_err(|_| CryptoError::InvalidKey)?;
     key_bytes.zeroize();
     mac.update(label.as_bytes());
     let digest = mac.finalize().into_bytes();
@@ -190,7 +193,8 @@ pub fn export_encrypted_backup(
     let mut derived = [0u8; 32];
     pbkdf2::pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, ITERATIONS, &mut derived);
 
-    let cipher = XChaCha20Poly1305::new_from_slice(&derived).map_err(|_| CryptoError::InvalidKey)?;
+    let cipher =
+        XChaCha20Poly1305::new_from_slice(&derived).map_err(|_| CryptoError::InvalidKey)?;
     derived.zeroize();
 
     let ct = cipher
@@ -237,9 +241,15 @@ pub fn restore_encrypted_backup(
     }
 
     let mut derived = [0u8; 32];
-    pbkdf2::pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, envelope.iterations, &mut derived);
+    pbkdf2::pbkdf2_hmac::<Sha256>(
+        passphrase.as_bytes(),
+        &salt,
+        envelope.iterations,
+        &mut derived,
+    );
 
-    let cipher = XChaCha20Poly1305::new_from_slice(&derived).map_err(|_| CryptoError::InvalidKey)?;
+    let cipher =
+        XChaCha20Poly1305::new_from_slice(&derived).map_err(|_| CryptoError::InvalidKey)?;
     derived.zeroize();
 
     cipher

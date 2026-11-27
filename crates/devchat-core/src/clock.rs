@@ -1,5 +1,5 @@
-use std::cmp::Ordering;
 use crate::types::{HlcTimestamp, Sequence};
+use std::cmp::Ordering;
 
 pub fn create_clock(now_ms: u64) -> HlcTimestamp {
     HlcTimestamp {

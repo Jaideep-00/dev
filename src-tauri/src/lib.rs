@@ -6,7 +6,9 @@ use devchat_core::join_code::generate_join_code as core_generate_join_code;
 use devchat_core::safety::sanitize_windows_filename;
 use devchat_core::types::NetworkInterfaceCandidate;
 use devchat_crypto::dpapi::is_dpapi_active;
-use devchat_net::{enumerate_lan_interfaces, selected_lan_interface, LanMeshHandle, DEVCHAT_LAN_UDP_PORT};
+use devchat_net::{
+    enumerate_lan_interfaces, selected_lan_interface, LanMeshHandle, DEVCHAT_LAN_UDP_PORT,
+};
 use devchat_store::{FtsSearchHit, LocalStore};
 use serde::Serialize;
 use tauri::{Emitter, State};
@@ -76,13 +78,19 @@ fn list_windows_adapters() -> Vec<NetworkInterfaceCandidate> {
 
 #[tauri::command]
 fn load_workspace(state: State<'_, AppState>) -> Result<Option<String>, String> {
-    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "store lock poisoned".to_string())?;
     store.load_workspace_json().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn save_workspace(state: State<'_, AppState>, workspace_json: String) -> Result<(), String> {
-    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "store lock poisoned".to_string())?;
     store
         .save_workspace_json(&workspace_json, unix_now_ms())
         .map_err(|e| e.to_string())
@@ -90,7 +98,10 @@ fn save_workspace(state: State<'_, AppState>, workspace_json: String) -> Result<
 
 #[tauri::command]
 fn clear_workspace(state: State<'_, AppState>) -> Result<(), String> {
-    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "store lock poisoned".to_string())?;
     store.clear_workspace().map_err(|e| e.to_string())
 }
 
@@ -102,7 +113,10 @@ fn index_message_fts(
     author_name: String,
     body: String,
 ) -> Result<(), String> {
-    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "store lock poisoned".to_string())?;
     store
         .index_message(&message_id, &room_id, &author_name, &body)
         .map_err(|e| e.to_string())
@@ -115,14 +129,20 @@ fn search_room_fts(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<FtsSearchHit>, String> {
-    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| "store lock poisoned".to_string())?;
     store
         .search_room_fts(&room_id, &query, limit.unwrap_or(50))
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn broadcast_lan_packet(state: State<'_, AppState>, packet_json: String) -> Result<(), String> {
+async fn broadcast_lan_packet(
+    state: State<'_, AppState>,
+    packet_json: String,
+) -> Result<(), String> {
     let guard = state.lan_mesh.read().await;
     if let Some(handle) = guard.as_ref() {
         handle
@@ -147,7 +167,8 @@ fn generate_join_code() -> String {
 #[tauri::command]
 fn save_attachment_to_downloads(raw_name: String, contents_utf8: String) -> Result<String, String> {
     let safe_name = sanitize_windows_filename(&raw_name);
-    let downloads = dirs::download_dir().ok_or_else(|| "Downloads folder unavailable".to_string())?;
+    let downloads =
+        dirs::download_dir().ok_or_else(|| "Downloads folder unavailable".to_string())?;
     let target = downloads.join(&safe_name);
 
     // Ensure resolved target stays strictly inside Downloads

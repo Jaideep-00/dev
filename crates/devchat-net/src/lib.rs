@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
 use devchat_core::safety::select_lan_interface;
 use devchat_core::types::NetworkInterfaceCandidate;
+use std::net::SocketAddr;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
@@ -31,14 +31,10 @@ pub fn enumerate_lan_interfaces() -> Vec<NetworkInterfaceCandidate> {
             match iface.addr {
                 if_addrs::IfAddr::V4(v4) => {
                     let ip = v4.ip.to_string();
-                    let is_loopback =
-                        iface_is_loopback || v4.ip.is_loopback();
+                    let is_loopback = iface_is_loopback || v4.ip.is_loopback();
 
                     Some(NetworkInterfaceCandidate {
-                        description: format!(
-                            "IPv4 Interface ({})",
-                            iface.name
-                        ),
+                        description: format!("IPv4 Interface ({})", iface.name),
                         name: iface.name,
                         ipv4: ip,
                         is_up: true,
